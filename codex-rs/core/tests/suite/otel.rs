@@ -885,9 +885,6 @@ async fn record_responses_sets_span_fields_for_response_events() {
         ("function_call", Some("output_item_added"), Some("fn")),
         ("message_from_assistant", Some("output_item_done"), None),
         ("reasoning", Some("output_item_done"), None),
-        ("text_delta", None, None),
-        ("reasoning_summary_delta", None, None),
-        ("reasoning_content_delta", None, None),
         ("completed", None, None),
     ];
 
@@ -911,6 +908,24 @@ async fn record_responses_sets_span_fields_for_response_events() {
             "missing span fields for {name}\nlogs:\n{logs}"
         );
     }
+
+    for name in [
+        "text_delta",
+        "reasoning_summary_delta",
+        "reasoning_content_delta",
+    ] {
+        let otel_name = format!("otel.name=\"{name}\"");
+        assert!(
+            !logs
+                .lines()
+                .any(|line| { line.contains("handle_responses{") && line.contains(&otel_name) }),
+            "routine delta unexpectedly created a span for {name}\nlogs:\n{logs}"
+        );
+    }
+    assert!(
+        !logs.lines().any(|line| line.contains("receiving{")),
+        "per-event receiving span should not be created\nlogs:\n{logs}"
+    );
 }
 
 #[tokio::test]

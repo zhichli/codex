@@ -2222,27 +2222,7 @@ async fn try_run_sampling_request(
     let mut active_item_is_streaming_to_client = false;
     let receiving_span = trace_span!("receiving_stream");
     let outcome: CodexResult<SamplingRequestResult> = loop {
-        let handle_responses = trace_span!(
-            parent: &receiving_span,
-            "handle_responses",
-            otel.name = field::Empty,
-            tool_name = field::Empty,
-            from = field::Empty,
-            codex.request.reasoning_effort = %reasoning_effort,
-            gen_ai.usage.input_tokens = field::Empty,
-            gen_ai.usage.cache_read.input_tokens = field::Empty,
-            gen_ai.usage.cache_write.input_tokens = field::Empty,
-            gen_ai.usage.output_tokens = field::Empty,
-            codex.usage.reasoning_output_tokens = field::Empty,
-            codex.usage.total_tokens = field::Empty,
-        );
-
-        let event = match stream
-            .next()
-            .instrument(trace_span!(parent: &handle_responses, "receiving"))
-            .or_cancel(&cancellation_token)
-            .await
-        {
+        let event = match stream.next().or_cancel(&cancellation_token).await {
             Ok(event) => event,
             Err(codex_async_utils::CancelErr::Cancelled) => {
                 break Err(CodexErr::TurnAborted);
@@ -2259,6 +2239,33 @@ async fn try_run_sampling_request(
             }
         };
 
+        // Routine streaming deltas are already represented by SSE counters and
+        // duration histograms. Keep spans for semantic boundaries such as output
+        // items and completion, but avoid two native spans per protocol fragment.
+        let handle_responses = if matches!(
+            &event,
+            ResponseEvent::OutputTextDelta(_)
+                | ResponseEvent::ToolCallInputDelta { .. }
+                | ResponseEvent::ReasoningSummaryDelta { .. }
+                | ResponseEvent::ReasoningContentDelta { .. }
+        ) {
+            tracing::Span::none()
+        } else {
+            trace_span!(
+                parent: &receiving_span,
+                "handle_responses",
+                otel.name = field::Empty,
+                tool_name = field::Empty,
+                from = field::Empty,
+                codex.request.reasoning_effort = %reasoning_effort,
+                gen_ai.usage.input_tokens = field::Empty,
+                gen_ai.usage.cache_read.input_tokens = field::Empty,
+                gen_ai.usage.cache_write.input_tokens = field::Empty,
+                gen_ai.usage.output_tokens = field::Empty,
+                codex.usage.reasoning_output_tokens = field::Empty,
+                codex.usage.total_tokens = field::Empty,
+            )
+        };
         sess.services
             .session_telemetry
             .record_responses(&handle_responses, &event);
