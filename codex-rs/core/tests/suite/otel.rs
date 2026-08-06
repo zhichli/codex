@@ -832,6 +832,12 @@ async fn record_responses_sets_span_fields_for_response_events() {
         ev_output_text_delta("delta"),
         ev_reasoning_summary_text_delta("summary-delta"),
         ev_reasoning_text_delta("raw-delta"),
+        serde_json::json!({
+            "type": "response.custom_tool_call_input.delta",
+            "item_id": "call-1",
+            "call_id": "call-1",
+            "delta": "{\"key\":",
+        }),
         ev_function_call("call-1", "fn", "{\"key\":\"value\"}"),
         ev_assistant_message("msg-1", "agent"),
         ev_reasoning_item("reasoning-1", &["summary"], &[]),
@@ -913,6 +919,7 @@ async fn record_responses_sets_span_fields_for_response_events() {
         "text_delta",
         "reasoning_summary_delta",
         "reasoning_content_delta",
+        "tool_input_delta",
     ] {
         let otel_name = format!("otel.name=\"{name}\"");
         assert!(
